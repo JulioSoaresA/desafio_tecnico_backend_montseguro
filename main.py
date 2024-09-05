@@ -22,10 +22,17 @@ def find_task(task_id):
             return task
 
 
+def find_index_task(task_id):
+    for i, task in enumerate(tasks):
+        if task["id"] == task_id:
+            return i
+
+
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
 def create_task(new_task: Task):
     print(new_task)
     return new_task.dict()
+
 
 
 @app.get("/tasks")
@@ -40,3 +47,13 @@ def get_task_by_id(task_id: int, response: Response):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"Task with id: {task_id} was not found")
     return task
+
+
+@app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(task_id: int):
+    index = find_index_task(task_id)
+    if index == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                            detail=f"Task with id: {task_id} does not exist")
+    tasks.pop(index)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
