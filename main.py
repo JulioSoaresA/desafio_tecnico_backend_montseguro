@@ -11,21 +11,20 @@ class Task(BaseModel):
     
     
 tasks = [
-        {"id": 1, "title": "task 01", "description": "descricao 01"}, 
-        {"id": 2, "title": "task 02", "description": "descricao 02"}
+        {"id": 1, "title": "task 01", "description": "descricao 01", "completed": False}, 
+        {"id": 2, "title": "task 02", "description": "descricao 02", "completed": False}
     ]
 
 
+# Função para buscar uma task pelo id
 def find_task(task_id):
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
+    return next((task for task in tasks if task["id"] == task_id), None)
 
 
+# Função para buscar o índice de uma task pelo id
 def find_index_task(task_id):
-    for i, task in enumerate(tasks):
-        if task["id"] == task_id:
-            return i
+    return next((i for i, task in enumerate(tasks) if task["id"] == task_id), None)
+
 
 
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
