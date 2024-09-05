@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+
 class Task(BaseModel):
     title: str
     description: str
