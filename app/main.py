@@ -1,8 +1,24 @@
-from fastapi import FastAPI, Response, status, HTTPException
+from fastapi import FastAPI, Response, status, HTTPException, Depends
 from fastapi.params import Body
 from pydantic import BaseModel
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import time
+from sqlalchemy.orm import Session
+from . import models
+from .db import engine, SessionLocal
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 class Task(BaseModel):
@@ -10,7 +26,20 @@ class Task(BaseModel):
     description: str
     completed: bool = False
     
-    
+while True:
+    try:
+        conn = psycopg2.connect(host='localhost', database='todo_list', 
+                                user='postgres', password='postgres',
+                                cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
+        print("Database connection was succesfull")
+        break
+    except Exception as error:
+        print("Connecting to database failed")
+        print("Error: ", error)
+        time.sleep(2)
+
+
 tasks = [
         {"id": 1, "title": "task 01", "description": "descricao 01", "completed": False}, 
         {"id": 2, "title": "task 02", "description": "descricao 02", "completed": False}
