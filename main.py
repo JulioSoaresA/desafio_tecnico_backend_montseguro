@@ -29,9 +29,11 @@ def find_index_task(task_id):
 
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
 def create_task(new_task: Task):
-    print(new_task)
-    return new_task.dict()
-
+    new_id = max(task["id"] for task in tasks) + 1 if tasks else 1
+    task_dict = new_task.model_dump()
+    task_dict["id"] = new_id
+    tasks.append(task_dict)
+    return task_dict
 
 
 @app.get("/tasks")
