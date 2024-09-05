@@ -1,11 +1,9 @@
 from fastapi import FastAPI, Response, status, HTTPException, Depends
-from fastapi.params import Body
-from pydantic import BaseModel
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
 from sqlalchemy.orm import Session
-from . import models
+from . import models, schemas
 from .db import engine, SessionLocal
 
 models.Base.metadata.create_all(bind=engine)
@@ -21,12 +19,6 @@ def get_db():
         db.close()
 
 
-class Task(BaseModel):
-    title: str
-    description: str
-    completed: bool = False
-    
-    
 while True:
     try:
         conn = psycopg2.connect(host='localhost', database='todo_list', 
@@ -59,7 +51,7 @@ def find_index_task(task_id):
 
 
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
-def create_task(task: Task, db: Session = Depends(get_db)):
+def create_task(task: schemas.Task, db: Session = Depends(get_db)):
     new_task = models.Task(
         **task.model_dump()
     )
@@ -71,7 +63,7 @@ def create_task(task: Task, db: Session = Depends(get_db)):
 
 
 @app.put("/tasks/{task_id}")
-def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db)):
+def update_task(task_id: int, updated_task: schemas.Task, db: Session = Depends(get_db)):
     task = db.query(models.Task).filter_by(id=task_id).first()
     
     if task is None:
@@ -95,7 +87,11 @@ def complete_task(task_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"Task with id: {task_id} was not found")
     
-    task.completed = True
+    if not task.completed:
+        task.completed = True
+    else: 
+        task.completed = False
+    
     db.commit()
     db.refresh(task)
     return task
