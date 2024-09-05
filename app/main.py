@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Response, status, HTTPException, Depends
+from typing import List
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
@@ -50,7 +51,7 @@ def find_index_task(task_id):
 
 
 
-@app.post("/tasks", status_code=status.HTTP_201_CREATED)
+@app.post("/tasks", status_code=status.HTTP_201_CREATED, response_model=schemas.Task)
 def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
     new_task = models.Task(
         **task.model_dump()
@@ -62,8 +63,8 @@ def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
     return new_task
 
 
-@app.put("/tasks/{task_id}")
-def update_task(task_id: int, updated_task: schemas.TaskCreate, db: Session = Depends(get_db)):
+@app.put("/tasks/{task_id}", response_model=schemas.Task)
+def update_task(task_id: int, updated_task: schemas.TaskUpdate, db: Session = Depends(get_db)):
     task = db.query(models.Task).filter_by(id=task_id).first()
     
     if task is None:
@@ -79,7 +80,7 @@ def update_task(task_id: int, updated_task: schemas.TaskCreate, db: Session = De
     return task
 
 
-@app.patch("/tasks/{task_id}")
+@app.patch("/tasks/{task_id}", response_model=schemas.Task)
 def complete_task(task_id: int, db: Session = Depends(get_db)):
     task = db.query(models.Task).filter_by(id=task_id).first()
 
@@ -97,13 +98,13 @@ def complete_task(task_id: int, db: Session = Depends(get_db)):
     return task
 
 
-@app.get("/tasks")
+@app.get("/tasks", response_model=List[schemas.Task])
 def get_task(db: Session = Depends(get_db)):
-    tasks = db.query(models.Task).all()
+    tasks = db.query(models.Task).order_by(models.Task.id.asc()).all()
     return tasks
 
 
-@app.get("/tasks/{task_id}")
+@app.get("/tasks/{task_id}", response_model=schemas.Task)
 def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
     task = db.query(models.Task).filter_by(id=task_id).first()
     if not task:
