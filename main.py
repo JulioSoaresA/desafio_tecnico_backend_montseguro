@@ -36,6 +36,29 @@ def create_task(new_task: Task):
     return task_dict
 
 
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, task: Task):
+    index = find_index_task(task_id)
+    if index is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                            detail=f"Task with id: {task_id} does not exist")
+    task_dict = task.model_dump()
+    task_dict["id"] = task_id
+    tasks[index] = task_dict
+    return task_dict
+
+
+@app.patch("/tasks/{task_id}")
+def complete_task(task_id: int):
+    task = find_task(task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                            detail=f"Task with id: {task_id} was not found")
+    
+    task["completed"] = True
+    return task
+
+
 @app.get("/tasks")
 def get_task():
     return tasks
@@ -53,7 +76,7 @@ def get_task_by_id(task_id: int, response: Response):
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(task_id: int):
     index = find_index_task(task_id)
-    if index == None:
+    if index is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"Task with id: {task_id} does not exist")
     tasks.pop(index)
