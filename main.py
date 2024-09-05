@@ -16,7 +16,27 @@ tasks = [
     ]
 
 
+def find_task(task_id):
+    for task in tasks:
+        if task["id"] == task_id:
+            return task
+
+
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
 def create_task(new_task: Task):
     print(new_task)
     return new_task.dict()
+
+
+@app.get("/tasks")
+def get_task():
+    return tasks
+
+
+@app.get("/tasks/{task_id}")
+def get_task_by_id(task_id: int, response: Response):
+    task = find_task(task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                            detail=f"Task with id: {task_id} was not found")
+    return task
