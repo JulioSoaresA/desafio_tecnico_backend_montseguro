@@ -26,6 +26,7 @@ class Task(BaseModel):
     description: str
     completed: bool = False
     
+    
 while True:
     try:
         conn = psycopg2.connect(host='localhost', database='todo_list', 
@@ -58,45 +59,57 @@ def find_index_task(task_id):
 
 
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
-def create_task(new_task: Task):
-    new_id = max(task["id"] for task in tasks) + 1 if tasks else 1
-    task_dict = new_task.model_dump()
-    task_dict["id"] = new_id
-    tasks.append(task_dict)
-    return task_dict
+def create_task(task: Task, db: Session = Depends(get_db)):
+    new_task = models.Task(
+        **task.model_dump()
+    )
+    
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return new_task
 
 
 @app.put("/tasks/{task_id}")
-def update_task(task_id: int, task: Task):
-    index = find_index_task(task_id)
-    if index is None:
+def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter_by(id=task_id).first()
+    
+    if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"Task with id: {task_id} does not exist")
-    task_dict = task.model_dump()
-    task_dict["id"] = task_id
-    tasks[index] = task_dict
-    return task_dict
+    
+    task_dict = updated_task.model_dump()
+    for key, value in task_dict.items():
+        setattr(task, key, value)
+
+    db.commit()
+    db.refresh(task)
+    return task
 
 
 @app.patch("/tasks/{task_id}")
-def complete_task(task_id: int):
-    task = find_task(task_id)
+def complete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter_by(id=task_id).first()
+
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"Task with id: {task_id} was not found")
     
-    task["completed"] = True
+    task.completed = True
+    db.commit()
+    db.refresh(task)
     return task
 
 
 @app.get("/tasks")
-def get_task():
+def get_task(db: Session = Depends(get_db)):
+    tasks = db.query(models.Task).all()
     return tasks
 
 
 @app.get("/tasks/{task_id}")
-def get_task_by_id(task_id: int, response: Response):
-    task = find_task(task_id)
+def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter_by(id=task_id).first()
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"Task with id: {task_id} was not found")
@@ -104,10 +117,13 @@ def get_task_by_id(task_id: int, response: Response):
 
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int):
-    index = find_index_task(task_id)
-    if index is None:
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter_by(id=task_id).first()
+
+    if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
                             detail=f"Task with id: {task_id} does not exist")
-    tasks.pop(index)
+    
+    db.delete(task)
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
