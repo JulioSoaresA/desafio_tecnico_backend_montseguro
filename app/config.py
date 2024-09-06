@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     database_port: str
     database_password: str
     database_name: str
+    database_name_test: str
     database_username: str
     redis_hostname: str
     redis_port: str

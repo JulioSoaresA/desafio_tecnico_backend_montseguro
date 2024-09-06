@@ -5,10 +5,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db import Base, get_db
 from app.cache import get_redis
-from app.mocks import async_redis_mock  # Importa o mock assíncrono
-
+from app.mocks import async_redis_mock  
+from app.config import settings
 # Configurações para o banco de dados em memória para testes
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_port}/{settings.database_name_test}"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=True)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -22,8 +22,15 @@ client = TestClient(app)
 def setup_db():
     # Criação das tabelas de banco de dados
     Base.metadata.create_all(bind=engine)
+    # Iniciar uma nova transação
+    connection = engine.connect()
+    transaction = connection.begin()
+    # Configurar o SessionLocal para usar a conexão de teste
+    TestingSessionLocal.configure(bind=connection)
     yield
-    # Cleanup após os testes
+    # Reverter a transação e fechar a conexão
+    transaction.rollback()
+    connection.close()
     Base.metadata.drop_all(bind=engine)
 
 def test_create_task():
