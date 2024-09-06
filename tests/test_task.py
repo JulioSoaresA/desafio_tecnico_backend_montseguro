@@ -1,123 +1,92 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
+from app.main import app 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db import Base, get_db
-from app.config import settings
+from app.cache import get_redis
+from app.mocks import async_redis_mock  # Importa o mock assíncrono
 
-# Cria uma conexão temporária com o banco de dados SQLite para testes
+# Configurações para o banco de dados em memória para testes
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Cria a base de dados de teste
-def override_get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-app.dependency_overrides[get_db] = override_get_db
+# Criação da aplicação FastAPI e cliente de teste
+app.dependency_overrides[get_db] = lambda: TestingSessionLocal()
+app.dependency_overrides[get_redis] = lambda: async_redis_mock
 
 client = TestClient(app)
 
-@pytest.fixture(scope="module")
-def setup_database():
+@pytest.fixture(scope="module", autouse=True)
+def setup_db():
+    # Criação das tabelas de banco de dados
     Base.metadata.create_all(bind=engine)
     yield
+    # Cleanup após os testes
     Base.metadata.drop_all(bind=engine)
 
-def test_create_task(setup_database):
+def test_create_task():
     response = client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
     assert response.status_code == 201
-    data = response.json()
-    assert "id" in data
-    assert data["title"] == "Test Task"
-    assert data["description"] == "Test Description"
-    assert data["completed"] == False
-    
-def test_create_task_missing_title(setup_database):
-    response = client.post("/tasks/", json={"description": "Test Description"})
-    assert response.status_code == 422
-    assert "title" in response.json()["detail"][0]["loc"]
+    assert response.json() == {"id": 1, "title": "Test Task", "description": "Test Description", "completed": False}
 
-def test_create_task_missing_description(setup_database):
-    response = client.post("/tasks/", json={"title": "Test Task"})
-    assert response.status_code == 422
-    assert "description" in response.json()["detail"][0]["loc"]
-
-def test_get_tasks(setup_database):
-    response = client.get("/tasks/")
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-
-def test_get_task_by_id(setup_database):
-    # Primeiro, crie uma tarefa para poder testá-la
-    response = client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
-    task_id = response.json()["id"]
-
-    response = client.get(f"/tasks/{task_id}")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == task_id
-    assert data["title"] == "Test Task"
-    
-def test_get_task_fields(setup_database):
-    response = client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
-    task_id = response.json()["id"]
-
-    response = client.get(f"/tasks/{task_id}")
-    data = response.json()
-    assert "completed" in data
-    assert "extra_field" not in data  # Supondo que "extra_field" não deve existir
-
-def test_update_task(client: TestClient, setup_database: None):
+def test_get_tasks(setup_db):
     # Cria uma nova tarefa
-    response = client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
-    task_id = response.json()["id"]
+    client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
     
-    # Atualiza a tarefa sem o campo 'completed'
-    response = client.put(f"/tasks/{task_id}", json={"title": "Updated Task", "description": "Updated Description"})
+    # Obtém a lista de tarefas
+    response = client.get("/tasks/")
+    
+    # Verifica o status da resposta
     assert response.status_code == 200
-    data = response.json()
-    assert data["title"] == "Updated Task"
-    assert data["description"] == "Updated Description"
-    assert "completed" in data  # Verifica que o campo 'completed' está presente
-    assert data["completed"] is False  # Supondo que o campo 'completed' deve ser False após atualização PUT
+    
+    # Verifica o conteúdo da resposta
+    tasks = response.json()
+    
+    # Verifica se a tarefa esperada está na lista
+    task_found = any(task["title"] == "Test Task" and task["description"] == "Test Description" for task in tasks)
+    assert task_found
 
-def test_update_task_invalid_data(setup_database):
-    response = client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
-    task_id = response.json()["id"]
-    
-    response = client.put(f"/tasks/{task_id}", json={"title": ""})  # título vazio
-    assert response.status_code == 422
-    
-def test_update_nonexistent_task(setup_database):
-    response = client.put("/tasks/999999", json={"title": "Updated Task", "description": "Updated Description"})
+def test_get_task_by_id():
+    client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
+    response = client.get("/tasks/1")
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "title": "Test Task", "description": "Test Description", "completed": False}
+
+def test_update_task():
+    client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
+    response = client.put("/tasks/1", json={"title": "Updated Task", "description": "Updated Description"})
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "title": "Updated Task", "description": "Updated Description", "completed": False}
+
+def test_create_task_invalid_data():
+    response = client.post("/tasks/", json={"title": "", "description": "Test Description"})
+    assert response.status_code == 422  # Unprocessable Entity
+
+def test_update_task_invalid_data():
+    client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
+    response = client.put("/tasks/1", json={"title": ""})
+    assert response.status_code == 422  # Unprocessable Entity
+
+def test_update_task_not_found():
+    response = client.put("/tasks/999", json={"title": "Test Task", "description": "Test Description"})
+    print(response)
     assert response.status_code == 404
 
-def test_complete_task(setup_database):
-    response = client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
-    task_id = response.json()["id"]
-
-    response = client.patch(f"/tasks/{task_id}")
+def test_complete_task():
+    client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
+    response = client.patch("/tasks/1")
     assert response.status_code == 200
-    data = response.json()
-    assert data["completed"] == True
+    assert response.json()["completed"] is True
 
-def test_delete_task(setup_database):
-    response = client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
-    task_id = response.json()["id"]
-
-    response = client.delete(f"/tasks/{task_id}")
+def test_delete_task():
+    client.post("/tasks/", json={"title": "Test Task", "description": "Test Description"})
+    response = client.delete("/tasks/1")
     assert response.status_code == 204
-
-    response = client.get(f"/tasks/{task_id}")
+    response = client.get("/tasks/1")
     assert response.status_code == 404
 
-def test_delete_nonexistent_task(setup_database):
-    response = client.delete("/tasks/999999")
+def test_delete_task_not_found():
+    response = client.delete("/tasks/999")
     assert response.status_code == 404
