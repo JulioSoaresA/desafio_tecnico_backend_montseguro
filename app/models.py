@@ -9,3 +9,11 @@ class Task(Base):
     title = Column(String, index=True)
     description = Column(String)
     completed = Column(Boolean, default=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "completed": self.completed
+        }
