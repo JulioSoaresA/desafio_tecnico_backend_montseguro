@@ -90,3 +90,16 @@ def test_delete_task():
 def test_delete_task_not_found():
     response = client.delete("/tasks/999")
     assert response.status_code == 404
+
+def test_get_tasks_cache():
+    # Criação de novas tarefas
+    client.post("/tasks/", json={"title": "Task 1", "description": "Test Cache 1"})
+    client.post("/tasks/", json={"title": "Task 2", "description": "Test Cache 2"})
+    
+    # Recuperação da lista de tarefas
+    response = client.get("/tasks/")
+    assert response.status_code == 200
+    tasks = response.json()
+    
+    # Verificação do número de tarefas
+    assert len(tasks) >= 2  # O número de tarefas deve ser pelo menos 2
