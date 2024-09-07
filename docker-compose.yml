@@ -1,0 +1,44 @@
+version: '3'
+
+services:
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+  test:
+    build: .
+    depends_on:
+      - db
+      - redis
+      - api
+    command: "python3 -m pytest"
+    volumes:
+      - .:/app
+
+
+volumes:
+  postgres_data:

@@ -8,8 +8,8 @@ from app.cache import get_redis
 from app.mocks import async_redis_mock  
 from app.config import settings
 # Configurações para o banco de dados em memória para testes
-SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_port}/{settings.database_name_test}"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, echo=True)
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Criação da aplicação FastAPI e cliente de teste
@@ -22,15 +22,7 @@ client = TestClient(app)
 def setup_db():
     # Criação das tabelas de banco de dados
     Base.metadata.create_all(bind=engine)
-    # Iniciar uma nova transação
-    connection = engine.connect()
-    transaction = connection.begin()
-    # Configurar o SessionLocal para usar a conexão de teste
-    TestingSessionLocal.configure(bind=connection)
     yield
-    # Reverter a transação e fechar a conexão
-    transaction.rollback()
-    connection.close()
     Base.metadata.drop_all(bind=engine)
 
 def test_create_task():
